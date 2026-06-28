@@ -1,0 +1,1856 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎰 GACHA SLOT</title>
+    <!-- Firebase SDK (hanya bisa dimuat jika online) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        /* ====== RESET & BASE ====== */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 16px;
+            position: relative;
+        }
+        /* ====== OFFLINE OVERLAY ====== */
+        #offlineOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.92);
+            backdrop-filter: blur(12px);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999;
+            color: #fff;
+            text-align: center;
+            padding: 30px;
+        }
+        #offlineOverlay.show {
+            display: flex;
+        }
+        #offlineOverlay .icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        #offlineOverlay h2 {
+            font-size: 2rem;
+            color: #ff6b6b;
+            margin-bottom: 10px;
+        }
+        #offlineOverlay p {
+            font-size: 1.1rem;
+            color: #aaa;
+            max-width: 400px;
+            line-height: 1.6;
+        }
+        #offlineOverlay .retry-btn {
+            margin-top: 25px;
+            padding: 14px 40px;
+            border: none;
+            border-radius: 60px;
+            background: linear-gradient(145deg, #ffd700, #f0a500);
+            color: #1a1a2e;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: 0.3s;
+            box-shadow: 0 4px 20px rgba(255,215,0,0.3);
+        }
+        #offlineOverlay .retry-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 30px rgba(255,215,0,0.5);
+        }
+
+        /* ====== LOADING ====== */
+        #loadingScreen {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 10000; transition: opacity 0.8s ease, visibility 0.8s ease;
+        }
+        #loadingScreen.hidden { opacity:0; visibility:hidden; pointer-events:none; }
+        .loader {
+            width:80px; height:80px;
+            border:6px solid rgba(255,215,0,0.1);
+            border-top:6px solid #ffd700;
+            border-radius:50%;
+            animation: spin 1s linear infinite;
+            margin-bottom:30px;
+            box-shadow:0 0 40px rgba(255,215,0,0.2);
+        }
+        .loader-text {
+            color:#ffd700;
+            font-size:1.5rem;
+            font-weight:700;
+            letter-spacing:4px;
+            animation:pulseText 1.5s ease infinite;
+            text-shadow:0 0 20px #ffd70044;
+        }
+        .loader-dots { display:flex; gap:8px; margin-top:12px; }
+        .loader-dots span {
+            width:12px; height:12px; background:#ffd700; border-radius:50%;
+            animation:dotBounce 1.4s ease infinite both;
+        }
+        .loader-dots span:nth-child(1){animation-delay:0s}
+        .loader-dots span:nth-child(2){animation-delay:0.2s}
+        .loader-dots span:nth-child(3){animation-delay:0.4s}
+        @keyframes spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+        @keyframes pulseText { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes dotBounce {
+            0%,80%,100%{transform:scale(0);opacity:0.3}
+            40%{transform:scale(1);opacity:1}
+        }
+
+        /* ====== AUTH SCREENS ====== */
+        #registerScreen, #loginScreen {
+            position:fixed; top:0; left:0; width:100%; height:100%;
+            background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);
+            display:flex; justify-content:center; align-items:center; z-index:9998; padding:20px;
+        }
+        #registerScreen.hidden, #loginScreen.hidden { display:none !important; }
+        .auth-bg {
+            position:absolute; top:0; left:0; width:100%; height:100%; overflow:hidden; z-index:0;
+        }
+        .auth-bg .orb {
+            position:absolute; border-radius:50%; filter:blur(80px); opacity:0.2;
+            animation:orbFloat 8s ease-in-out infinite alternate;
+        }
+        .auth-bg .orb:nth-child(1){width:400px;height:400px;background:#ffd700;top:-100px;right:-100px}
+        .auth-bg .orb:nth-child(2){width:300px;height:300px;background:#ff6b6b;bottom:-50px;left:-50px;animation-delay:2s}
+        .auth-bg .orb:nth-child(3){width:250px;height:250px;background:#4ecdc4;top:50%;left:50%;transform:translate(-50%,-50%);animation-delay:4s}
+        @keyframes orbFloat {
+            0%{transform:translate(0,0) scale(1)}
+            100%{transform:translate(50px,30px) scale(1.2)}
+        }
+        .auth-container {
+            position:relative; z-index:1;
+            background:rgba(255,255,255,0.05);
+            backdrop-filter:blur(20px);
+            border-radius:30px;
+            padding:40px 36px;
+            max-width:420px; width:100%;
+            border:1px solid rgba(255,215,0,0.15);
+            box-shadow:0 30px 60px rgba(0,0,0,0.6);
+        }
+        .auth-icon { text-align:center; font-size:3.5rem; margin-bottom:8px; }
+        .auth-title { text-align:center; color:#ffd700; font-size:1.8rem; font-weight:700; letter-spacing:2px; }
+        .auth-sub { text-align:center; color:#888; font-size:0.9rem; margin-bottom:28px; }
+        .auth-input-group { margin-bottom:18px; }
+        .auth-input-group label {
+            display:block; color:#aaa; font-size:0.85rem; font-weight:600; margin-bottom:6px; letter-spacing:0.5px;
+        }
+        .auth-input-group input {
+            width:100%; padding:14px 18px; border-radius:14px;
+            border:2px solid rgba(255,215,0,0.15);
+            background:rgba(0,0,0,0.3);
+            color:#fff; font-size:1rem; transition:0.3s; outline:none;
+        }
+        .auth-input-group input:focus {
+            border-color:#ffd700; box-shadow:0 0 20px rgba(255,215,0,0.1);
+        }
+        .auth-input-group input::placeholder { color:#555; }
+        .auth-btn {
+            width:100%; padding:16px; border-radius:14px; border:none;
+            background:linear-gradient(145deg,#ffd700,#f0a500);
+            color:#1a1a2e; font-size:1.1rem; font-weight:700; cursor:pointer;
+            transition:0.3s; box-shadow:0 4px 20px rgba(255,215,0,0.2);
+            margin-top:6px; letter-spacing:1px;
+        }
+        .auth-btn:hover { transform:translateY(-2px); box-shadow:0 6px 30px rgba(255,215,0,0.3); }
+        .auth-btn:active { transform:translateY(1px); }
+        .auth-footer {
+            text-align:center; color:#666; margin-top:20px; font-size:0.9rem;
+        }
+        .auth-footer span {
+            color:#ffd700; cursor:pointer; font-weight:600; transition:0.3s;
+        }
+        .auth-footer span:hover { text-shadow:0 0 20px #ffd70044; }
+        .auth-message {
+            text-align:center; margin-top:14px; font-size:0.9rem; min-height:28px;
+            padding:6px 12px; border-radius:10px;
+        }
+        .auth-message.success { color:#00ff88; background:rgba(0,255,136,0.08); }
+        .auth-message.error { color:#ff6b6b; background:rgba(255,107,107,0.08); }
+
+        /* ====== BERANDA ====== */
+        #berandaScreen {
+            position:fixed; top:0; left:0; width:100%; height:100%;
+            background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);
+            display:none; flex-direction:column; justify-content:center; align-items:center;
+            z-index:9997; padding:20px;
+        }
+        #berandaScreen.show { display:flex; }
+        .beranda-bg {
+            position:absolute; top:0; left:0; width:100%; height:100%; overflow:hidden; z-index:0;
+        }
+        .beranda-bg .orb {
+            position:absolute; border-radius:50%; filter:blur(80px); opacity:0.3;
+            animation:orbFloat 8s ease-in-out infinite alternate;
+        }
+        .beranda-bg .orb:nth-child(1){width:400px;height:400px;background:#ffd700;top:-100px;right:-100px}
+        .beranda-bg .orb:nth-child(2){width:300px;height:300px;background:#ff6b6b;bottom:-50px;left:-50px;animation-delay:2s}
+        .beranda-bg .orb:nth-child(3){width:250px;height:250px;background:#4ecdc4;top:50%;left:50%;transform:translate(-50%,-50%);animation-delay:4s}
+        .beranda-bg .orb:nth-child(4){width:200px;height:200px;background:#a29bfe;top:20%;left:10%;animation-delay:1s}
+        .beranda-bg .orb:nth-child(5){width:180px;height:180px;background:#fd79a8;bottom:20%;right:10%;animation-delay:3s}
+        .beranda-content {
+            position:relative; z-index:1; text-align:center; max-width:480px; width:100%;
+        }
+        .beranda-icon {
+            font-size:8rem; display:block; margin-bottom:10px;
+            animation:iconFloat 3s ease-in-out infinite;
+            filter:drop-shadow(0 0 40px rgba(255,215,0,0.3));
+            position:relative;
+        }
+        .beranda-icon::after {
+            content:''; position:absolute; bottom:-10px; left:50%; transform:translateX(-50%);
+            width:80px; height:20px;
+            background:radial-gradient(ellipse,rgba(255,215,0,0.3),transparent);
+            border-radius:50%; filter:blur(10px);
+            animation:shadowPulse 3s ease-in-out infinite;
+        }
+        @keyframes iconFloat {
+            0%,100%{transform:translateY(0) rotate(-3deg)}
+            50%{transform:translateY(-15px) rotate(3deg)}
+        }
+        @keyframes shadowPulse {
+            0%,100%{transform:translateX(-50%) scale(1);opacity:0.3}
+            50%{transform:translateX(-50%) scale(1.5);opacity:0.1}
+        }
+        .beranda-user {
+            color:#ccc; font-size:1rem; margin-bottom:16px;
+            background:rgba(255,255,255,0.05); padding:8px 16px; border-radius:30px; display:inline-block;
+        }
+        .beranda-user strong { color:#ffd700; }
+        .beranda-title {
+            font-size:3rem; font-weight:900; color:#ffd700;
+            text-shadow:0 0 30px #ffd70044, 0 0 60px #ffd70022;
+            margin-bottom:6px; letter-spacing:3px;
+        }
+        .beranda-title span { color:#fff; text-shadow:0 0 20px #ffffff33; }
+        .beranda-sub {
+            color:#aaa; font-size:1rem; letter-spacing:6px; margin-bottom:30px; text-transform:uppercase;
+        }
+        .beranda-saldo {
+            background: rgba(255,215,0,0.08);
+            border: 1px solid rgba(255,215,0,0.2);
+            border-radius: 60px;
+            padding: 12px 28px;
+            display: inline-block;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+        }
+        .beranda-saldo .label {
+            color: #aaa;
+            font-size: 0.85rem;
+            letter-spacing: 2px;
+            margin-right: 8px;
+        }
+        .beranda-saldo .value {
+            color: #ffd700;
+            font-size: 1.8rem;
+            font-weight: 700;
+            text-shadow: 0 0 20px #ffd70044;
+        }
+        .beranda-btn {
+            background:linear-gradient(145deg,#ffd700,#f0a500);
+            border:none; border-radius:60px;
+            padding:18px 40px;
+            font-size:1.5rem; font-weight:800; color:#1a1a2e;
+            letter-spacing:2px;
+            box-shadow:0 8px 0 #8f6f1a, 0 12px 40px #ffd70044;
+            cursor:pointer; transition:all 0.08s ease;
+            width:100%; max-width:300px;
+        }
+        .beranda-btn:active { transform:translateY(6px); box-shadow:0 2px 0 #8f6f1a, 0 8px 30px #ffd70033; }
+        .beranda-btn:hover { transform:translateY(-2px); box-shadow:0 10px 0 #8f6f1a, 0 16px 50px #ffd70055; }
+        .beranda-btn.logout-btn {
+            background:linear-gradient(145deg,#ff6b6b,#e74c3c);
+            box-shadow:0 8px 0 #8f1a1a, 0 12px 40px #ff6b6b44;
+            margin-top:10px; font-size:1rem; padding:12px 30px;
+        }
+        .beranda-btn.logout-btn:hover { box-shadow:0 10px 0 #8f1a1a, 0 16px 50px #ff6b6b55; }
+        .beranda-version { color:#555; font-size:0.7rem; margin-top:20px; letter-spacing:2px; }
+
+        /* ====== GAME ====== */
+        .container {
+            background:rgba(255,255,255,0.06); backdrop-filter:blur(16px);
+            border-radius:40px; padding:24px 28px 36px;
+            max-width:540px; width:100%;
+            box-shadow:0 30px 60px rgba(0,0,0,0.8);
+            border:1px solid rgba(255,215,0,0.2);
+            position:relative; z-index:1; display:none;
+        }
+        .container.show { display:block; animation:fadeInGame 0.8s ease forwards; }
+        @keyframes fadeInGame { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+        h1 { text-align:center; color:#ffd700; font-size:1.8rem; letter-spacing:2px; text-shadow:0 0 20px #ffd70066; margin-bottom:16px; }
+        .balance-box {
+            background:#0a0a1acc; border-radius:20px; padding:16px 20px;
+            border:1px solid #ffd70055; box-shadow:inset 0 0 20px #ffd70022;
+            margin-bottom:20px;
+        }
+        .balance-row { display:flex; justify-content:space-between; align-items:center; color:#fff; }
+        .balance-row .label { font-size:0.95rem; color:#aaa; }
+        .balance-row .value { font-size:1.8rem; font-weight:700; color:#ffd700; text-shadow:0 0 12px #ffd70044; }
+        .bet-control {
+            display:flex; align-items:center; gap:12px; margin-top:12px;
+            background:#00000044; padding:10px 16px; border-radius:60px;
+            border:1px solid #ffffff22; flex-wrap:wrap;
+        }
+        .bet-control label { color:#ccc; font-size:0.9rem; font-weight:600; }
+        .bet-input-group { display:flex; flex:1; gap:8px; align-items:center; min-width:150px; }
+        .bet-control input[type="number"] {
+            flex:1; padding:8px 12px; border-radius:30px;
+            border:2px solid #ffd70055; background:#0a0a1acc; color:#ffd700;
+            font-size:1rem; font-weight:700; outline:none; min-width:80px; transition:0.3s;
+        }
+        .bet-control input[type="number"]:focus { border-color:#ffd700; box-shadow:0 0 20px #ffd70033; }
+        .bet-control input[type="number"]::-webkit-inner-spin-button { opacity:1; }
+        .bet-presets { display:flex; gap:6px; flex-wrap:wrap; }
+        .bet-presets button {
+            background:#2a2a4ccc; border:1px solid #5a5a88; color:#ddd;
+            padding:4px 12px; border-radius:20px; font-size:0.75rem;
+            cursor:pointer; transition:0.15s; font-weight:600;
+        }
+        .bet-presets button:hover { background:#ffd70033; border-color:#ffd70088; color:#ffd700; }
+        .bet-presets button.active { background:#ffd70044; border-color:#ffd700; color:#ffd700; }
+        .slot-window {
+            background:#0a0a18; border-radius:30px; padding:20px 12px;
+            border:2px solid #ffd70066;
+            box-shadow:0 0 40px #ffd70033, inset 0 0 30px #000000aa;
+            margin-bottom:24px; position:relative;
+        }
+        .slot-window::before {
+            content:'🎰'; position:absolute; top:-14px; left:20px;
+            background:#0a0a18; padding:0 12px; font-size:1.2rem; color:#ffd700;
+        }
+        .reels { display:flex; justify-content:center; gap:12px; flex-wrap:wrap; }
+        .reel {
+            background:#1a1a32; border-radius:20px; padding:10px 6px;
+            min-width:80px; flex:1; max-width:120px;
+            box-shadow:inset 0 0 20px #000000aa, 0 4px 12px #00000088;
+            display:flex; flex-direction:column; align-items:center;
+            border:1px solid #ffffff15;
+        }
+        .reel .icon { font-size:3.6rem; line-height:1.2; filter:drop-shadow(0 0 10px #ffffff55); user-select:none; transition:0.1s; }
+        .reel .icon.spinning { animation:spinIcon 0.1s infinite; }
+        @keyframes spinIcon { 0%,100%{transform:scale(1)} 50%{transform:scale(0.9)} }
+        .reel .label { color:#888; font-size:0.6rem; letter-spacing:1px; background:#00000066; padding:2px 12px; border-radius:20px; margin-top:4px; }
+        .spin-btn {
+            background:linear-gradient(145deg,#ffd700,#f0a500);
+            border:none; border-radius:60px; padding:18px 16px;
+            width:100%; font-size:1.6rem; font-weight:800; color:#1a1a2e;
+            letter-spacing:2px;
+            box-shadow:0 8px 0 #8f6f1a, 0 12px 40px #ffd70044;
+            transition:all 0.08s ease; cursor:pointer; margin:8px 0 16px;
+            display:flex; align-items:center; justify-content:center; gap:16px;
+        }
+        .spin-btn:active { transform:translateY(6px); box-shadow:0 2px 0 #8f6f1a, 0 8px 30px #ffd70033; }
+        .spin-btn:disabled { opacity:0.4; transform:translateY(4px); box-shadow:0 4px 0 #5f4a1a; pointer-events:none; }
+        .result-area {
+            background:#0a0a1acc; border-radius:20px; padding:14px 18px; margin-top:12px;
+            border-left:4px solid #ffd700; color:#eee; font-size:1rem; min-height:70px;
+            display:flex; align-items:center; justify-content:center; text-align:center;
+            word-break:break-word; line-height:1.6; backdrop-filter:blur(4px);
+            box-shadow:inset 0 0 20px #00000077;
+        }
+        .result-area .win { color:#00ff88; font-weight:bold; font-size:1.3rem; }
+        .result-area .lose { color:#ff6b6b; font-size:1.3rem; }
+        .result-area .jackpot-msg { color:#ffd700; font-weight:bold; font-size:1.4rem; animation:pulse 0.8s ease infinite; }
+        .footer-actions { display:flex; gap:10px; margin:12px 0 6px; flex-wrap:wrap; }
+        .footer-actions button {
+            flex:1; background:#2a2a4ccc; border:1px solid #5a5a88; color:#ddd;
+            padding:10px 6px; border-radius:40px; font-weight:600;
+            backdrop-filter:blur(4px); cursor:pointer; transition:0.15s;
+            font-size:0.85rem; min-width:80px;
+        }
+        .footer-actions button:hover { background:#3a3a6ccc; border-color:#ffd70088; color:#fff; }
+        .footer-actions button:active { transform:scale(0.96); }
+        .logout-btn-small { background:#ff6b6b44 !important; border-color:#ff6b6b55 !important; color:#ff6b6b !important; }
+        .logout-btn-small:hover { background:#ff6b6b66 !important; border-color:#ff6b6b !important; }
+
+        /* ====== JACKPOT OVERLAY ====== */
+        .jackpot-overlay {
+            position:fixed; top:0; left:0; width:100%; height:100%;
+            background:rgba(0,0,0,0.85); backdrop-filter:blur(10px);
+            display:none; justify-content:center; align-items:center; z-index:9999;
+            cursor:pointer; animation:fadeIn 0.5s ease;
+        }
+        .jackpot-overlay.show { display:flex; }
+        .jackpot-content { text-align:center; animation:jackpotPop 0.8s ease; padding:20px; }
+        .jackpot-content .jackpot-title {
+            font-size:4rem; font-weight:900; color:#ffd700;
+            text-shadow:0 0 30px #ffd700, 0 0 60px #ffd70066, 0 0 100px #ffd70033;
+            animation:jackpotPulse 0.8s ease infinite alternate;
+            margin-bottom:10px; letter-spacing:4px;
+        }
+        .jackpot-content .jackpot-symbols { font-size:4rem; letter-spacing:20px; margin:16px 0; filter:drop-shadow(0 0 20px #ffd70088); }
+        .jackpot-content .jackpot-amount { font-size:3.5rem; font-weight:800; color:#00ff88; text-shadow:0 0 30px #00ff8866, 0 0 60px #00ff8833; margin:10px 0; }
+        .jackpot-content .jackpot-sub { font-size:1.2rem; color:#aaa; margin-top:16px; animation:blinkText 1.2s ease infinite; }
+        .jackpot-content .jackpot-emoji { font-size:5rem; display:block; margin-bottom:10px; }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        @keyframes jackpotPop { 0%{transform:scale(0.3);opacity:0} 70%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
+        @keyframes jackpotPulse {
+            0%{transform:scale(1);text-shadow:0 0 30px #ffd700, 0 0 60px #ffd70066}
+            100%{transform:scale(1.05);text-shadow:0 0 50px #ffd700, 0 0 100px #ffd70088, 0 0 150px #ffd70044}
+        }
+        @keyframes blinkText { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+        /* ====== ADMIN PANEL ====== */
+        .admin-toggle {
+            position:fixed; bottom:30px; right:30px; width:60px; height:60px; border-radius:50%;
+            background:linear-gradient(145deg,#ffd700,#f0a500);
+            border:2px solid #ffd700; color:#1a1a2e; font-size:2rem;
+            cursor:pointer; z-index:100;
+            box-shadow:0 4px 20px rgba(255,215,0,0.4); transition:all 0.3s ease;
+            display:none; align-items:center; justify-content:center;
+        }
+        .admin-toggle:hover { transform:scale(1.1); box-shadow:0 6px 30px rgba(255,215,0,0.6); }
+        .admin-toggle.show { display:flex; }
+        .admin-panel {
+            position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.9);
+            width:420px; max-width:95%; max-height:85vh;
+            background:rgba(15,12,41,0.98); backdrop-filter:blur(20px);
+            border:1px solid rgba(255,215,0,0.3); border-radius:24px;
+            box-shadow:0 30px 80px rgba(0,0,0,0.9), 0 0 60px rgba(255,215,0,0.05);
+            z-index:10001; opacity:0; visibility:hidden; transition:all 0.3s ease; overflow:hidden;
+        }
+        .admin-panel.show { opacity:1; visibility:visible; transform:translate(-50%,-50%) scale(1); }
+        .admin-panel .admin-header {
+            display:flex; justify-content:space-between; align-items:center;
+            padding:18px 24px; background:rgba(255,215,0,0.08);
+            border-bottom:1px solid rgba(255,215,0,0.15);
+        }
+        .admin-panel .admin-header span { color:#ffd700; font-size:1.2rem; font-weight:700; letter-spacing:2px; }
+        .admin-panel .admin-close {
+            background:none; border:none; color:#888; font-size:1.5rem;
+            cursor:pointer; transition:0.3s; padding:4px 8px;
+        }
+        .admin-panel .admin-close:hover { color:#ff6b6b; transform:rotate(90deg); }
+        .admin-panel .admin-body { padding:20px 24px 24px; overflow-y:auto; max-height:calc(85vh - 70px); }
+        .admin-panel .admin-section { margin-bottom:20px; }
+        .admin-panel .admin-section:last-child { margin-bottom:0; }
+        .admin-panel .admin-label {
+            color:#aaa; font-size:0.8rem; text-transform:uppercase; letter-spacing:2px;
+            margin-bottom:10px; font-weight:600;
+        }
+        .admin-panel .user-list {
+            background:rgba(255,255,255,0.03); border-radius:12px;
+            border:1px solid rgba(255,255,255,0.05); padding:4px 0; max-height:200px; overflow-y:auto;
+        }
+        .admin-panel .user-item {
+            display:flex; align-items:center; padding:10px 16px;
+            border-bottom:1px solid rgba(255,255,255,0.03); transition:0.2s; cursor:pointer;
+        }
+        .admin-panel .user-item:last-child { border-bottom:none; }
+        .admin-panel .user-item:hover { background:rgba(255,215,0,0.06); }
+        .admin-panel .user-dot { width:10px; height:10px; border-radius:50%; margin-right:12px; flex-shrink:0; }
+        .admin-panel .user-dot.online { background:#00ff88; box-shadow:0 0 10px #00ff8844; }
+        .admin-panel .user-name { color:#eee; font-weight:600; flex:1; }
+        .admin-panel .user-badge { color:#ffd700; font-size:0.9rem; margin-left:6px; }
+        .admin-panel .user-status { color:#666; font-size:0.75rem; background:rgba(255,255,255,0.05); padding:2px 10px; border-radius:12px; }
+        .admin-panel .refresh-btn {
+            background:rgba(255,255,255,0.05); border:1px solid rgba(255,215,0,0.2);
+            color:#ffd700; padding:4px 12px; border-radius:20px; font-size:0.7rem;
+            cursor:pointer; transition:0.3s; margin-left:8px;
+        }
+        .admin-panel .refresh-btn:hover { background:rgba(255,215,0,0.15); }
+        .admin-panel .jackpot-form { display:flex; flex-direction:column; gap:10px; }
+        .admin-panel .jackpot-form select {
+            padding:12px 16px; border-radius:12px;
+            border:1px solid rgba(255,215,0,0.2); background:rgba(0,0,0,0.4);
+            color:#eee; font-size:1rem; outline:none; cursor:pointer; transition:0.3s;
+        }
+        .admin-panel .jackpot-form select:focus { border-color:#ffd700; }
+        .admin-panel .jackpot-form select option { background:#1a1a2e; }
+        .admin-panel .jackpot-amount-input {
+            display:flex; align-items:center;
+            background:rgba(0,0,0,0.4); border:1px solid rgba(255,215,0,0.2);
+            border-radius:12px; padding:0 16px; transition:0.3s;
+        }
+        .admin-panel .jackpot-amount-input:focus-within { border-color:#ffd700; }
+        .admin-panel .jackpot-amount-input span { color:#ffd700; font-weight:700; font-size:1.1rem; margin-right:8px; }
+        .admin-panel .jackpot-amount-input input {
+            flex:1; padding:12px 0; background:none; border:none;
+            color:#fff; font-size:1.1rem; font-weight:600; outline:none;
+        }
+        .admin-panel .jackpot-amount-input input::-webkit-inner-spin-button { opacity:1; }
+        .admin-panel .jackpot-give-btn {
+            padding:14px; border-radius:12px; border:none;
+            background:linear-gradient(145deg,#ffd700,#f0a500);
+            color:#1a1a2e; font-weight:700; font-size:1rem; cursor:pointer;
+            transition:all 0.2s ease; box-shadow:0 4px 15px rgba(255,215,0,0.2);
+        }
+        .admin-panel .jackpot-give-btn:hover { transform:translateY(-2px); box-shadow:0 6px 25px rgba(255,215,0,0.3); }
+        .admin-panel .jackpot-give-btn:active { transform:translateY(1px); }
+        .admin-panel .admin-log {
+            background:rgba(0,0,0,0.3); border-radius:12px;
+            padding:10px 14px; max-height:120px; overflow-y:auto;
+            font-family:'Courier New',monospace; font-size:0.8rem;
+            border:1px solid rgba(255,255,255,0.05);
+        }
+        .admin-panel .admin-log .log-entry { color:#888; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.03); }
+        .admin-panel .admin-log .log-entry:last-child { border-bottom:none; }
+        .admin-panel .admin-log .log-entry.jackpot-log { color:#ffd700; }
+
+        /* ====== RESPONSIVE ====== */
+        @media (max-width:480px) {
+            .container { padding:16px; }
+            .reel .icon { font-size:2.8rem; }
+            .spin-btn { font-size:1.3rem; padding:14px; }
+            .balance-row .value { font-size:1.4rem; }
+            .bet-control { flex-direction:column; align-items:stretch; }
+            .bet-input-group { flex-wrap:wrap; }
+            .bet-control input[type="number"] { min-width:60px; }
+            .jackpot-content .jackpot-title { font-size:2.5rem; }
+            .jackpot-content .jackpot-amount { font-size:2.5rem; }
+            .jackpot-content .jackpot-symbols { font-size:3rem; letter-spacing:12px; }
+            .jackpot-content .jackpot-emoji { font-size:3.5rem; }
+            .beranda-icon { font-size:5rem; }
+            .beranda-title { font-size:2rem; }
+            .beranda-sub { font-size:0.7rem; letter-spacing:4px; }
+            .beranda-saldo .value { font-size:1.4rem; }
+            .beranda-btn { font-size:1.2rem; padding:14px 30px; max-width:100%; }
+            .loader { width:60px; height:60px; }
+            .loader-text { font-size:1.2rem; }
+            .admin-panel { width:95%; max-height:90vh; }
+            .admin-toggle { width:50px; height:50px; font-size:1.5rem; bottom:20px; right:20px; }
+            .auth-container { padding:28px 20px; }
+            .auth-title { font-size:1.4rem; }
+            .beranda-user { font-size:0.85rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ====== OFFLINE OVERLAY ====== -->
+    <div id="offlineOverlay">
+        <div class="icon">📡</div>
+        <h2>Tidak Ada Koneksi Internet</h2>
+        <p>Aplikasi ini hanya bisa diakses secara online. Periksa koneksi internet Anda dan coba lagi.</p>
+        <button class="retry-btn" id="retryOnlineBtn">🔄 Coba Lagi</button>
+    </div>
+
+    <!-- ====== LOADING ====== -->
+    <div id="loadingScreen">
+        <div class="loader"></div>
+        <div class="loader-text">🎰 GACHA SLOT</div>
+        <div class="loader-dots"><span></span><span></span><span></span></div>
+    </div>
+
+    <!-- ====== REGISTER ====== -->
+    <div id="registerScreen">
+        <div class="auth-bg"><div class="orb"></div><div class="orb"></div><div class="orb"></div></div>
+        <div class="auth-container">
+            <div class="auth-icon">📝</div>
+            <div class="auth-title">Daftar Akun</div>
+            <div class="auth-sub">Buat akun untuk bermain GACHA SLOT</div>
+            <form id="registerForm">
+                <div class="auth-input-group"><label>👤 Nama Pengguna</label><input type="text" id="regUsername" placeholder="Masukkan nama pengguna" required></div>
+                <div class="auth-input-group"><label>🔒 Password</label><input type="password" id="regPassword" placeholder="Masukkan password (min 4 karakter)" required minlength="4"></div>
+                <div class="auth-input-group"><label>🔒 Konfirmasi Password</label><input type="password" id="regConfirmPassword" placeholder="Konfirmasi password" required></div>
+                <button type="submit" class="auth-btn" id="registerBtn">📝 Daftar</button>
+            </form>
+            <div class="auth-footer">Sudah punya akun? <span id="goToLogin">Masuk di sini</span></div>
+            <div id="registerMessage" class="auth-message"></div>
+        </div>
+    </div>
+
+    <!-- ====== LOGIN ====== -->
+    <div id="loginScreen" style="display:none;">
+        <div class="auth-bg"><div class="orb"></div><div class="orb"></div><div class="orb"></div></div>
+        <div class="auth-container">
+            <div class="auth-icon">🔐</div>
+            <div class="auth-title">Masuk</div>
+            <div class="auth-sub">Masuk ke akun GACHA SLOT</div>
+            <form id="loginForm">
+                <div class="auth-input-group"><label>👤 Nama Pengguna</label><input type="text" id="loginUsername" placeholder="Masukkan nama pengguna" required></div>
+                <div class="auth-input-group"><label>🔒 Password</label><input type="password" id="loginPassword" placeholder="Masukkan password" required></div>
+                <button type="submit" class="auth-btn" id="loginBtn">🔐 Masuk</button>
+            </form>
+            <div class="auth-footer">Belum punya akun? <span id="goToRegister">Daftar di sini</span></div>
+            <div id="loginMessage" class="auth-message"></div>
+        </div>
+    </div>
+
+    <!-- ====== BERANDA ====== -->
+    <div id="berandaScreen">
+        <div class="beranda-bg"><div class="orb"></div><div class="orb"></div><div class="orb"></div><div class="orb"></div><div class="orb"></div></div>
+        <div class="beranda-content">
+            <div class="beranda-icon">🎰</div>
+            <div class="beranda-title">GACHA <span>SLOT</span></div>
+            <div class="beranda-sub">✦ Spin & Win ✦</div>
+            <div class="beranda-user" id="berandaUser">👋 Selamat datang, <strong id="welcomeUsername">User</strong></div>
+            <div class="beranda-saldo">
+                <span class="label">💰 SALDO</span>
+                <span class="value" id="berandaSaldo">Rp100.000</span>
+            </div>
+            <button class="beranda-btn" id="enterGameBtn">🎲 MASUK</button>
+            <button class="beranda-btn logout-btn" id="logoutBtn">🚪 Keluar</button>
+            <div class="beranda-version">v2.0 • GACHA SLOT</div>
+        </div>
+    </div>
+    
+    <!-- ====== JACKPOT OVERLAY ====== -->
+    <div class="jackpot-overlay" id="jackpotOverlay">
+        <div class="jackpot-content">
+            <span class="jackpot-emoji">🌟</span>
+            <div class="jackpot-title">🎰 JACKPOT! 🎰</div>
+            <div class="jackpot-symbols" id="jackpotSymbols">🍒 🍋 🍊</div>
+            <div class="jackpot-amount" id="jackpotAmount">Rp0</div>
+            <div class="jackpot-sub">✨ Tap di mana saja untuk lanjut ✨</div>
+        </div>
+    </div>
+
+    <!-- ====== ADMIN PANEL ====== -->
+    <div class="admin-panel" id="adminPanel">
+        <div class="admin-header">
+            <span>👑 ADMIN PANEL</span>
+            <div>
+                <button class="refresh-btn" id="refreshUserListBtn">🔄 Refresh</button>
+                <button class="admin-close" id="adminCloseBtn">✕</button>
+            </div>
+        </div>
+        <div class="admin-body">
+            <div class="admin-section">
+                <div class="admin-label">👥 Pengguna Online (Real-time)</div>
+                <div class="user-list" id="userList"></div>
+            </div>
+            <div class="admin-section">
+                <div class="admin-label">🎯 Beri Jackpot (Pending)</div>
+                <div class="jackpot-form">
+                    <select id="jackpotUserSelect"><option value="">Pilih Pengguna</option></select>
+                    <div class="jackpot-amount-input">
+                        <span>Rp</span>
+                        <input type="number" id="jackpotAmountInput" value="100000" min="1000" step="1000">
+                    </div>
+                    <button class="jackpot-give-btn" id="giveJackpotBtn">🎰 Beri Jackpot (Pending)</button>
+                    <small style="color:#666;font-size:0.7rem;text-align:center;">Jackpot akan diberikan saat user melakukan spin</small>
+                </div>
+            </div>
+            <div class="admin-section">
+                <div class="admin-label">📊 Aktivitas</div>
+                <div class="admin-log" id="adminLog"><div class="log-entry">🟢 Admin panel siap</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== ADMIN TOGGLE ====== -->
+    <button class="admin-toggle" id="adminToggleBtn" title="Admin Panel">👑</button>
+
+    <!-- ====== GAME ====== -->
+    <div class="container" id="gameContainer">
+        <h1>🎰 GACHA SLOT</h1>
+        <div class="balance-box">
+            <div class="balance-row">
+                <span class="label">💰 SALDO</span>
+                <span class="value" id="balanceDisplay">Rp100.000</span>
+            </div>
+            <div class="bet-control">
+                <label>💵 TARUHAN</label>
+                <div class="bet-input-group">
+                    <input type="number" id="betInput" min="1" value="10000" step="1000">
+                    <div class="bet-presets">
+                        <button data-bet="1000">1K</button>
+                        <button data-bet="5000">5K</button>
+                        <button data-bet="10000" class="active">10K</button>
+                        <button data-bet="25000">25K</button>
+                        <button data-bet="50000">50K</button>
+                        <button data-bet="100000">100K</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slot-window">
+            <div class="reels" id="reelsContainer">
+                <div class="reel" id="reel1"><div class="icon" id="icon1">🍒</div><div class="label">REEL 1</div></div>
+                <div class="reel" id="reel2"><div class="icon" id="icon2">🍒</div><div class="label">REEL 2</div></div>
+                <div class="reel" id="reel3"><div class="icon" id="icon3">🍒</div><div class="label">REEL 3</div></div>
+            </div>
+        </div>
+        <button class="spin-btn" id="spinBtn">🎲 PUTAR</button>
+        <div class="result-area" id="resultArea"><span>✨ Masukkan taruhan & tekan PUTAR ✨</span></div>
+        <div class="footer-actions">
+            <button id="maxBetBtn">🔥 Max Bet</button>
+            <button class="logout-btn-small" id="logoutGameBtn">🚪 Keluar</button>
+        </div>
+    </div>
+
+    <script>
+        // =============================================
+        //  1. CEK KONEKSI INTERNET (HARUS ONLINE)
+        // =============================================
+        const offlineOverlay = document.getElementById('offlineOverlay');
+        const retryBtn = document.getElementById('retryOnlineBtn');
+        const loadingScreen = document.getElementById('loadingScreen');
+
+        function isOnline() {
+            return navigator.onLine;
+        }
+
+        function showOffline() {
+            offlineOverlay.classList.add('show');
+            loadingScreen.classList.add('hidden'); // sembunyikan loading kalau masih muncul
+            // Sembunyikan semua layar lain
+            document.getElementById('registerScreen').classList.add('hidden');
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('berandaScreen').classList.remove('show');
+            document.getElementById('gameContainer').classList.remove('show');
+        }
+
+        function hideOffline() {
+            offlineOverlay.classList.remove('show');
+            // Lanjutkan loading seperti biasa
+            if (!loadingScreen.classList.contains('hidden')) {
+                // loading masih jalan
+            } else {
+                // Jika loading sudah hilang, tampilkan register
+                document.getElementById('registerScreen').classList.remove('hidden');
+            }
+        }
+
+        // Cek status awal
+        if (!isOnline()) {
+            showOffline();
+        } else {
+            // Online, loading akan berjalan normal
+            // Tapi kita tetap pasang listener untuk perubahan koneksi
+        }
+
+        // Pantau perubahan koneksi
+        window.addEventListener('online', function() {
+            hideOffline();
+            // refresh halaman agar semua resource termuat ulang (opsional)
+            location.reload();
+        });
+
+        window.addEventListener('offline', function() {
+            showOffline();
+        });
+
+        // Tombol retry
+        retryBtn.addEventListener('click', function() {
+            if (isOnline()) {
+                hideOffline();
+                location.reload(); // refresh agar semua terinisialisasi ulang
+            } else {
+                alert('Masih offline. Periksa koneksi internet Anda.');
+            }
+        });
+
+        // =============================================
+        //  2. FIREBASE (hanya dijalankan jika online)
+        // =============================================
+        // Firebase SDK sudah di-load di head, tapi jika offline
+        // maka script tidak akan jalan. Kita bungkus semua inisialisasi
+        // agar aman.
+
+        // Cegah eksekusi jika offline
+        if (!isOnline()) {
+            console.warn('Offline – Firebase tidak akan diinisialisasi.');
+            // Tampilkan overlay offline (sudah)
+        } else {
+            // ================== FIREBASE KONFIGURASI ==================
+            const firebaseConfig = {
+                apiKey: "AIzaSyDHqYrDZwVH1z2OBo3nCiTjAMVNN84pH9s",
+                authDomain: "gachaslot.firebaseapp.com",
+                databaseURL: "https://gachaslot-default-rtdb.firebaseio.com",
+                projectId: "gachaslot",
+                storageBucket: "gachaslot.firebasestorage.app",
+                messagingSenderId: "966791998578",
+                appId: "1:966791998578:web:5ee4ab7b5a5968d08766eb",
+                measurementId: "G-9W75T66WVG"
+            };
+
+            firebase.initializeApp(firebaseConfig);
+            const database = firebase.database();
+            console.log('✅ Firebase terinisialisasi (online)');
+
+            // ================== FUNGSI DATABASE ==================
+            function findUserByUsername(username, callback) {
+                database.ref('users').orderByChild('username').equalTo(username).once('value', function(snapshot) {
+                    let user = null, userId = null;
+                    snapshot.forEach(function(child) {
+                        user = child.val();
+                        userId = child.key;
+                    });
+                    callback(user, userId);
+                }).catch(function(error) {
+                    console.error('❌ Error findUser:', error);
+                    callback(null, null);
+                });
+            }
+
+            function saveUserToDB(user) {
+                return database.ref('users').push({
+                    username: user.username,
+                    password: user.password,
+                    isAdmin: user.isAdmin || false,
+                    balance: user.balance || 100000,
+                    isOnline: user.isOnline || false
+                });
+            }
+
+            function updateUserInDB(username, data) {
+                database.ref('users').orderByChild('username').equalTo(username).once('value', function(snapshot) {
+                    snapshot.forEach(function(child) {
+                        child.ref.update(data);
+                    });
+                }).catch(function(error) {
+                    console.error('❌ Error updateUser:', error);
+                });
+            }
+
+            function getOnlineUsersOnce(callback) {
+                database.ref('users').orderByChild('isOnline').equalTo(true).once('value', function(snapshot) {
+                    const users = [];
+                    snapshot.forEach(function(child) {
+                        users.push({
+                            id: child.key,
+                            username: child.val().username,
+                            isAdmin: child.val().isAdmin || false,
+                            balance: child.val().balance || 100000,
+                            isOnline: true
+                        });
+                    });
+                    callback(users);
+                }).catch(function(error) {
+                    console.error('❌ Error getOnlineUsers:', error);
+                    callback([]);
+                });
+            }
+
+            let onlineUsersListener = null;
+            function listenOnlineUsers(callback) {
+                if (onlineUsersListener) {
+                    onlineUsersListener.off();
+                    onlineUsersListener = null;
+                }
+                onlineUsersListener = database.ref('users').orderByChild('isOnline').equalTo(true);
+                onlineUsersListener.on('value', function(snapshot) {
+                    const users = [];
+                    snapshot.forEach(function(child) {
+                        users.push({
+                            id: child.key,
+                            username: child.val().username,
+                            isAdmin: child.val().isAdmin || false,
+                            balance: child.val().balance || 100000,
+                            isOnline: true
+                        });
+                    });
+                    callback(users);
+                }, function(error) {
+                    console.error('❌ Error listener online users:', error);
+                });
+            }
+
+            function detachOnlineUsersListener() {
+                if (onlineUsersListener) {
+                    onlineUsersListener.off();
+                    onlineUsersListener = null;
+                }
+            }
+
+            // ================== PENDING JACKPOT ==================
+            function givePendingJackpot(username, amount) {
+                return database.ref('pendingJackpots').push({
+                    username: username,
+                    amount: amount,
+                    timestamp: Date.now(),
+                    claimed: false
+                });
+            }
+
+            function getPendingJackpotForUser(username, callback) {
+                database.ref('pendingJackpots').orderByChild('username').equalTo(username).once('value', function(snapshot) {
+                    let jackpots = [];
+                    snapshot.forEach(function(child) {
+                        const data = child.val();
+                        if (!data.claimed) {
+                            jackpots.push({
+                                id: child.key,
+                                amount: data.amount,
+                                timestamp: data.timestamp
+                            });
+                        }
+                    });
+                    callback(jackpots);
+                }).catch(function(error) {
+                    console.error('❌ Error getPendingJackpot:', error);
+                    callback([]);
+                });
+            }
+
+            function claimPendingJackpot(jackpotId, username, amount) {
+                database.ref('pendingJackpots/' + jackpotId).update({ claimed: true });
+                findUserByUsername(username, function(user, userId) {
+                    if (user) {
+                        const newBalance = (user.balance || 0) + amount;
+                        updateUserInDB(username, { balance: newBalance });
+                        console.log('✅ Jackpot ' + amount + ' diberikan ke ' + username);
+                    }
+                });
+            }
+
+            // ================== DOM ELEMENTS ==================
+            const registerScreen = document.getElementById('registerScreen');
+            const loginScreen = document.getElementById('loginScreen');
+            const berandaScreen = document.getElementById('berandaScreen');
+            const gameContainer = document.getElementById('gameContainer');
+
+            const regForm = document.getElementById('registerForm');
+            const regUsername = document.getElementById('regUsername');
+            const regPassword = document.getElementById('regPassword');
+            const regConfirmPassword = document.getElementById('regConfirmPassword');
+            const regMessage = document.getElementById('registerMessage');
+            const goToLogin = document.getElementById('goToLogin');
+
+            const loginForm = document.getElementById('loginForm');
+            const loginUsername = document.getElementById('loginUsername');
+            const loginPassword = document.getElementById('loginPassword');
+            const loginMessage = document.getElementById('loginMessage');
+            const goToRegister = document.getElementById('goToRegister');
+
+            const welcomeUsername = document.getElementById('welcomeUsername');
+            const berandaSaldo = document.getElementById('berandaSaldo');
+            const enterGameBtn = document.getElementById('enterGameBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const logoutGameBtn = document.getElementById('logoutGameBtn');
+
+            const adminToggle = document.getElementById('adminToggleBtn');
+            const adminPanel = document.getElementById('adminPanel');
+            const adminClose = document.getElementById('adminCloseBtn');
+            const refreshUserListBtn = document.getElementById('refreshUserListBtn');
+            const userList = document.getElementById('userList');
+            const jackpotUserSelect = document.getElementById('jackpotUserSelect');
+            const jackpotAmountInput = document.getElementById('jackpotAmountInput');
+            const giveJackpotBtn = document.getElementById('giveJackpotBtn');
+            const adminLog = document.getElementById('adminLog');
+
+            let currentUser = null;
+            let currentUserId = null;
+            let isAdminLoggedIn = false;
+            let balance = 100000;
+            let currentBet = 10000;
+            let isSpinning = false;
+            let isJackpotShowing = false;
+
+            // ================== FUNGSI UTILITY ==================
+            function formatRupiah(amount) {
+                return new Intl.NumberFormat('id-ID', {
+                    style: 'currency',
+                    currency: 'IDR',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }).format(amount);
+            }
+
+            function updateBerandaSaldo() {
+                if (berandaSaldo) {
+                    berandaSaldo.textContent = formatRupiah(balance);
+                }
+            }
+
+            function updateBalanceUI() {
+                const balanceEl = document.getElementById('balanceDisplay');
+                if (balanceEl) {
+                    balanceEl.textContent = formatRupiah(balance);
+                }
+                const spinBtn = document.getElementById('spinBtn');
+                if (spinBtn) {
+                    if (balance < currentBet || currentBet <= 0) {
+                        spinBtn.disabled = true;
+                        spinBtn.textContent = currentBet <= 0 ? '⚠️ Bet 0' : '💰 Saldo Kurang';
+                    } else {
+                        spinBtn.disabled = false;
+                        spinBtn.innerHTML = '🎲 PUTAR';
+                    }
+                }
+                if (currentUser) {
+                    updateUserInDB(currentUser.username, { balance: balance });
+                }
+                updateBerandaSaldo();
+            }
+
+            function updateBetUI() {
+                const betInput = document.getElementById('betInput');
+                if (!betInput) return;
+                var val = parseInt(betInput.value);
+                if (isNaN(val) || val < 1) {
+                    betInput.value = 1;
+                    val = 1;
+                }
+                currentBet = val;
+                updateBalanceUI();
+                const presetButtons = document.querySelectorAll('.bet-presets button');
+                presetButtons.forEach(function(btn) {
+                    btn.classList.toggle('active', parseInt(btn.dataset.bet) === currentBet);
+                });
+            }
+
+            function checkAutoReset() {
+                if (balance < 5000) {
+                    balance = 100000;
+                    updateBalanceUI();
+                    const resultArea = document.getElementById('resultArea');
+                    if (resultArea) {
+                        resultArea.innerHTML = '🔄 Auto Reset! Saldo di bawah Rp5.000, direset ke Rp100.000';
+                    }
+                    if (currentUser) {
+                        updateUserInDB(currentUser.username, { balance: balance });
+                    }
+                    return true;
+                }
+                return false;
+            }
+
+            // ================== INISIALISASI ADMIN DEFAULT ==================
+            let adminCreated = false;
+            function createDefaultAdmin() {
+                if (adminCreated) return;
+                findUserByUsername('SAITAMA', function(user, userId) {
+                    if (!user) {
+                        saveUserToDB({
+                            username: 'SAITAMA',
+                            password: 'ADMIN123',
+                            isAdmin: true,
+                            balance: 100000,
+                            isOnline: false
+                        }).then(function() {
+                            console.log('👑 Admin default dibuat');
+                            adminCreated = true;
+                        }).catch(function(err) {
+                            console.error('❌ Gagal buat admin:', err);
+                        });
+                    } else {
+                        console.log('👑 Admin SAITAMA sudah ada');
+                        adminCreated = true;
+                    }
+                });
+            }
+            
+            // ================== LOADING ==================
+            setTimeout(function() {
+                loadingScreen.classList.add('hidden');
+                setTimeout(function() {
+                    registerScreen.classList.remove('hidden');
+                    loginScreen.style.display = 'none';
+                    createDefaultAdmin();
+                    console.log('✅ Loading selesai, tampilkan register');
+                }, 300);
+            }, 2000);
+
+            // ================== SWITCH SCREENS ==================
+            function showRegister() {
+                registerScreen.classList.remove('hidden');
+                loginScreen.style.display = 'none';
+                const msg = document.getElementById('registerMessage');
+                if (msg) { msg.textContent = ''; msg.className = 'auth-message'; }
+            }
+
+            function showLogin() {
+                registerScreen.classList.add('hidden');
+                loginScreen.style.display = 'flex';
+                const msg = document.getElementById('loginMessage');
+                if (msg) { msg.textContent = ''; msg.className = 'auth-message'; }
+            }
+
+            if (goToLogin) {
+                goToLogin.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    showLogin();
+                });
+            }
+            if (goToRegister) {
+                goToRegister.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    showRegister();
+                });
+            }
+
+            // ================== REGISTER ==================
+            if (regForm) {
+                regForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const msg = document.getElementById('registerMessage');
+                    if (!msg) return;
+                    msg.textContent = '';
+                    msg.className = 'auth-message';
+                    const username = regUsername.value.trim();
+                    const password = regPassword.value;
+                    const confirm = regConfirmPassword.value;
+
+                    if (!username || username.length < 3) {
+                        msg.textContent = '⚠️ Nama pengguna minimal 3 karakter!';
+                        msg.className = 'auth-message error';
+                        return;
+                    }
+                    if (username.toLowerCase() === 'saitama') {
+                        msg.textContent = '⚠️ Nama pengguna tidak tersedia!';
+                        msg.className = 'auth-message error';
+                        return;
+                    }
+                    if (password.length < 4) {
+                        msg.textContent = '⚠️ Password minimal 4 karakter!';
+                        msg.className = 'auth-message error';
+                        return;
+                    }
+                    if (password !== confirm) {
+                        msg.textContent = '⚠️ Password tidak cocok!';
+                        msg.className = 'auth-message error';
+                        return;
+                    }
+
+                    findUserByUsername(username, function(user, userId) {
+                        if (user) {
+                            msg.textContent = '⚠️ Nama pengguna sudah terdaftar!';
+                            msg.className = 'auth-message error';
+                            return;
+                        }
+                        saveUserToDB({
+                            username: username,
+                            password: password,
+                            isAdmin: false,
+                            balance: 100000,
+                            isOnline: false
+                        }).then(function() {
+                            msg.textContent = '✅ Pendaftaran berhasil! Silakan login.';
+                            msg.className = 'auth-message success';
+                            regUsername.value = '';
+                            regPassword.value = '';
+                            regConfirmPassword.value = '';
+                            setTimeout(function() {
+                                showLogin();
+                                const loginUser = document.getElementById('loginUsername');
+                                if (loginUser) loginUser.value = username;
+                                const loginMsg = document.getElementById('loginMessage');
+                                if (loginMsg) {
+                                    loginMsg.textContent = '✅ Akun berhasil dibuat! Silakan login.';
+                                    loginMsg.className = 'auth-message success';
+                                }
+                            }, 1500);
+                        }).catch(function(err) {
+                            msg.textContent = '⚠️ Gagal menyimpan data: ' + err.message;
+                            msg.className = 'auth-message error';
+                        });
+                    });
+                });
+            }
+
+            // ================== LOGIN ==================
+            if (loginForm) {
+                loginForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const msg = document.getElementById('loginMessage');
+                    if (!msg) return;
+                    msg.textContent = '';
+                    msg.className = 'auth-message';
+                    const username = loginUsername.value.trim();
+                    const password = loginPassword.value;
+
+                    if (!username || !password) {
+                        msg.textContent = '⚠️ Isi semua field!';
+                        msg.className = 'auth-message error';
+                        return;
+                    }
+
+                    findUserByUsername(username, function(user, userId) {
+                        if (!user) {
+                            msg.textContent = '⚠️ Akun tidak ditemukan! Silakan daftar.';
+                            msg.className = 'auth-message error';
+                            return;
+                        }
+                        if (user.password !== password) {
+                            msg.textContent = '⚠️ Password salah!';
+                            msg.className = 'auth-message error';
+                            return;
+                        }
+
+                        currentUser = user;
+                        currentUserId = userId;
+                        currentUser.isOnline = true;
+                        updateUserInDB(username, { isOnline: true });
+
+                        if (user.isAdmin) {
+                            isAdminLoggedIn = true;
+                        } else {
+                            isAdminLoggedIn = false;
+                        }
+
+                        loginScreen.style.display = 'none';
+                        registerScreen.classList.add('hidden');
+                        berandaScreen.classList.add('show');
+
+                        if (welcomeUsername) {
+                            welcomeUsername.textContent = username;
+                            if (user.isAdmin) {
+                                welcomeUsername.textContent = username + ' 👑';
+                            }
+                        }
+
+                        if (isAdminLoggedIn) {
+                            adminToggle.classList.add('show');
+                            addLog('👑 Admin ' + username + ' login');
+                        } else {
+                            adminToggle.classList.remove('show');
+                        }
+
+                        balance = user.balance || 100000;
+                        updateBalanceUI();
+                        updateBerandaSaldo();
+
+                        msg.textContent = '';
+                        msg.className = 'auth-message';
+                        loginPassword.value = '';
+                    });
+                });
+            }
+
+            // ================== LOGOUT ==================
+            function logout() {
+                if (currentUser) {
+                    updateUserInDB(currentUser.username, { isOnline: false });
+                    if (isAdminLoggedIn) {
+                        addLog('👑 Admin ' + currentUser.username + ' logout');
+                    }
+                }
+                currentUser = null;
+                currentUserId = null;
+                isAdminLoggedIn = false;
+                adminToggle.classList.remove('show');
+                adminPanel.classList.remove('show');
+                detachOnlineUsersListener();
+                berandaScreen.classList.remove('show');
+                setTimeout(function() {
+                    gameContainer.classList.remove('show');
+                    registerScreen.classList.remove('hidden');
+                    loginScreen.style.display = 'none';
+                }, 300);
+            }
+
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    logout();
+                });
+            }
+            if (logoutGameBtn) {
+                logoutGameBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    gameContainer.classList.remove('show');
+                    berandaScreen.classList.add('show');
+                    updateBerandaSaldo();
+                });
+            }
+
+            // ================== ENTER GAME ==================
+            if (enterGameBtn) {
+                enterGameBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    berandaScreen.classList.remove('show');
+                    setTimeout(function() {
+                        gameContainer.classList.add('show');
+                        initAudio();
+                        if (currentUser) {
+                            balance = currentUser.balance || 100000;
+                            updateBalanceUI();
+                        }
+                    }, 300);
+                });
+            }
+
+            // ================== ADMIN PANEL ==================
+            function addLog(message, isJackpot) {
+                isJackpot = isJackpot || false;
+                const entry = document.createElement('div');
+                entry.className = 'log-entry' + (isJackpot ? ' jackpot-log' : '');
+                var time = new Date().toLocaleTimeString();
+                entry.textContent = '[' + time + '] ' + message;
+                adminLog.appendChild(entry);
+                adminLog.scrollTop = adminLog.scrollHeight;
+                while (adminLog.children.length > 50) {
+                    adminLog.removeChild(adminLog.firstChild);
+                }
+            }
+
+            function updateUserDropdown() {
+                getOnlineUsersOnce(function(onlineUsers) {
+                    var currentVal = jackpotUserSelect.value;
+                    jackpotUserSelect.innerHTML = '<option value="">Pilih Pengguna</option>';
+                    onlineUsers.forEach(function(user) {
+                        if (!user.isAdmin) {
+                            var opt = document.createElement('option');
+                            opt.value = user.username;
+                            opt.textContent = user.username;
+                            jackpotUserSelect.appendChild(opt);
+                        }
+                    });
+                    if (currentVal && jackpotUserSelect.querySelector('option[value="' + currentVal + '"]')) {
+                        jackpotUserSelect.value = currentVal;
+                    }
+                });
+            }
+
+            if (adminToggle) {
+                adminToggle.addEventListener('click', function() {
+                    adminPanel.classList.toggle('show');
+                    if (adminPanel.classList.contains('show')) {
+                        listenOnlineUsers(function(users) {
+                            userList.innerHTML = '';
+                            if (users.length === 0) {
+                                var div = document.createElement('div');
+                                div.className = 'user-item';
+                                div.innerHTML = '<span style="color:#666;padding:8px 0;">Tidak ada pengguna online</span>';
+                                userList.appendChild(div);
+                            } else {
+                                users.forEach(function(user) {
+                                    var div = document.createElement('div');
+                                    div.className = 'user-item';
+                                    var dot = document.createElement('span');
+                                    dot.className = 'user-dot online';
+                                    var name = document.createElement('span');
+                                    name.className = 'user-name';
+                                    name.textContent = user.username;
+                                    var badge = document.createElement('span');
+                                    if (user.isAdmin) {
+                                        badge.className = 'user-badge';
+                                        badge.textContent = '👑';
+                                    }
+                                    var status = document.createElement('span');
+                                    status.className = 'user-status';
+                                    status.textContent = 'Online';
+                                    div.appendChild(dot);
+                                    div.appendChild(name);
+                                    if (user.isAdmin) div.appendChild(badge);
+                                    div.appendChild(status);
+                                    div.addEventListener('click', function() {
+                                        if (!user.isAdmin) {
+                                            jackpotUserSelect.value = user.username;
+                                        }
+                                    });
+                                    userList.appendChild(div);
+                                });
+                            }
+                            updateUserDropdown();
+                        });
+                        addLog('🟢 Admin membuka panel (real-time)');
+                    } else {
+                        detachOnlineUsersListener();
+                        adminPanel.classList.remove('show');
+                    }
+                });
+            }
+            
+            if (adminClose) {
+                adminClose.addEventListener('click', function() {
+                    adminPanel.classList.remove('show');
+                    detachOnlineUsersListener();
+                });
+            }
+
+            if (refreshUserListBtn) {
+                refreshUserListBtn.addEventListener('click', function() {
+                    updateUserDropdown();
+                    addLog('🔄 Refresh manual');
+                });
+            }
+
+            document.addEventListener('click', function(e) {
+                if (adminPanel.classList.contains('show')) {
+                    if (!adminPanel.contains(e.target) && e.target !== adminToggle) {
+                        adminPanel.classList.remove('show');
+                        detachOnlineUsersListener();
+                    }
+                }
+            });
+
+            // ================== GIVE PENDING JACKPOT ==================
+            if (giveJackpotBtn) {
+                giveJackpotBtn.addEventListener('click', function() {
+                    var selectedUser = jackpotUserSelect.value;
+                    var amount = parseInt(jackpotAmountInput.value);
+                    if (!selectedUser) {
+                        alert('Pilih pengguna terlebih dahulu!');
+                        return;
+                    }
+                    if (isNaN(amount) || amount < 1000) {
+                        alert('Masukkan nominal jackpot minimal Rp1.000!');
+                        return;
+                    }
+                    findUserByUsername(selectedUser, function(user, userId) {
+                        if (!user || !user.isOnline) {
+                            alert('Pengguna sedang offline atau tidak ditemukan!');
+                            return;
+                        }
+                        givePendingJackpot(selectedUser, amount).then(function(ref) {
+                            addLog('🎰 Jackpot PENDING untuk ' + selectedUser + ' sebesar ' + formatRupiah(amount), true);
+                            alert('✅ Jackpot pending berhasil diberikan! User akan mendapatkannya saat spin.');
+                            jackpotUserSelect.value = '';
+                            jackpotAmountInput.value = 100000;
+                        }).catch(function(err) {
+                            alert('❌ Gagal menyimpan jackpot: ' + err.message);
+                        });
+                    });
+                });
+            }
+
+            // ================== JACKPOT OVERLAY ==================
+            function showJackpotOverlay(symbols, amount, targetUser) {
+                targetUser = targetUser || null;
+                var overlay = document.getElementById('jackpotOverlay');
+                if (!overlay) return;
+                var symbolsEl = document.getElementById('jackpotSymbols');
+                var amountEl = document.getElementById('jackpotAmount');
+                var subEl = document.querySelector('.jackpot-sub');
+                if (symbolsEl) symbolsEl.textContent = symbols;
+                if (amountEl) amountEl.textContent = formatRupiah(amount);
+                if (subEl) {
+                    if (targetUser) {
+                        subEl.textContent = '🎯 ' + targetUser + ' mendapatkan JACKPOT! ✨';
+                    } else {
+                        subEl.textContent = '✨ Tap di mana saja untuk lanjut ✨';
+                    }
+                }
+                overlay.classList.add('show');
+                document.body.style.overflow = 'hidden';
+                playJackpotSound();
+                setTimeout(function() {
+                    if (overlay.classList.contains('show')) {
+                        overlay.classList.remove('show');
+                        document.body.style.overflow = '';
+                    }
+                }, 5000);
+            }
+
+            function hideJackpotOverlay() {
+                var overlay = document.getElementById('jackpotOverlay');
+                if (overlay) overlay.classList.remove('show');
+                document.body.style.overflow = '';
+            }
+
+            document.getElementById('jackpotOverlay').addEventListener('click', function() {
+                if (this.classList.contains('show')) {
+                    hideJackpotOverlay();
+                }
+            });
+
+            // ================== SLOT GAME ==================
+            var SYMBOLS = [
+                { id: '🍒', name: 'Cherry' },
+                { id: '🍋', name: 'Lemon' },
+                { id: '🍊', name: 'Orange' },
+                { id: '🍉', name: 'Watermelon' },
+                { id: '⭐', name: 'Star' },
+                { id: '💎', name: 'Diamond' },
+                { id: '👑', name: 'Crown' }
+            ];
+
+            function getRandomSymbol() {
+                return SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+            }
+
+            function getRandomMultiplier() {
+                var roll = Math.random();
+                if (roll < 0.55) {
+                    var decimals = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
+                    return decimals[Math.floor(Math.random() * decimals.length)];
+                } else if (roll < 0.75) {
+                    return 2;
+                } else if (roll < 0.90) {
+                    return 0;
+                } else if (roll < 0.97) {
+                    return Math.floor(Math.random() * 3) + 3;
+                } else {
+                    return Math.floor(Math.random() * 10) + 6;
+                }
+            }
+
+            // ================== AUDIO ==================
+            var audioCtx = null;
+            function initAudio() {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+            }
+
+            function playSpinSound() {
+                try {
+                    initAudio();
+                    var notes = [523.25, 659.25, 783.99];
+                    notes.forEach(function(freq, index) {
+                        var oscillator = audioCtx.createOscillator();
+                        var gainNode = audioCtx.createGain();
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioCtx.destination);
+                        oscillator.type = 'sine';
+                        oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                        gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+                        oscillator.start(audioCtx.currentTime + (index * 0.08));
+                        oscillator.stop(audioCtx.currentTime + 0.15 + (index * 0.08));
+                    });
+                    for (var i = 0; i < 3; i++) {
+                        var osc = audioCtx.createOscillator();
+                        var gain = audioCtx.createGain();
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.type = 'square';
+                        osc.frequency.setValueAtTime(150 + Math.random() * 100, audioCtx.currentTime);
+                        gain.gain.setValueAtTime(0.02, audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+                        osc.start(audioCtx.currentTime + (i * 0.05) + 0.3);
+                        osc.stop(audioCtx.currentTime + 0.35 + (i * 0.05));
+                    }
+                } catch (e) {}
+            }
+
+            function playWinSound() {
+                try {
+                    initAudio();
+                    var notes = [523.25, 659.25, 783.99, 1046.50];
+                    notes.forEach(function(freq, index) {
+                        var oscillator = audioCtx.createOscillator();
+                        var gainNode = audioCtx.createGain();
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioCtx.destination);
+                        oscillator.type = 'sine';
+                        oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime + (index * 0.12));
+                        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime + (index * 0.12));
+                        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2 + (index * 0.12));
+                        oscillator.start(audioCtx.currentTime + (index * 0.12));
+                        oscillator.stop(audioCtx.currentTime + 0.25 + (index * 0.12));
+                    });
+                } catch (e) {}
+            }
+
+            function playJackpotSound() {
+                try {
+                    initAudio();
+                    var notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+                    notes.forEach(function(freq, index) {
+                        var oscillator = audioCtx.createOscillator();
+                        var gainNode = audioCtx.createGain();
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioCtx.destination);
+                        oscillator.type = 'sine';
+                        oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime + (index * 0.1));
+                        gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime + (index * 0.1));
+                        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3 + (index * 0.1));
+                        oscillator.start(audioCtx.currentTime + (index * 0.1));
+                        oscillator.stop(audioCtx.currentTime + 0.35 + (index * 0.1));
+                    });
+                    var osc = audioCtx.createOscillator();
+                    var gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(200, audioCtx.currentTime + 0.5);
+                    osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.9);
+                    gain.gain.setValueAtTime(0.05, audioCtx.currentTime + 0.5);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.0);
+                    osc.start(audioCtx.currentTime + 0.5);
+                    osc.stop(audioCtx.currentTime + 1.0);
+                } catch (e) {}
+            }
+
+            function playLoseSound() {
+                try {
+                    initAudio();
+                    var notes = [523.25, 493.88, 440.00, 392.00];
+                    notes.forEach(function(freq, index) {
+                        var oscillator = audioCtx.createOscillator();
+                        var gainNode = audioCtx.createGain();
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioCtx.destination);
+                        oscillator.type = 'sine';
+                        oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime + (index * 0.1));
+                        gainNode.gain.setValueAtTime(0.06, audioCtx.currentTime + (index * 0.1));
+                        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15 + (index * 0.1));
+                        oscillator.start(audioCtx.currentTime + (index * 0.1));
+                        oscillator.stop(audioCtx.currentTime + 0.2 + (index * 0.1));
+                    });
+                } catch (e) {}
+            }
+
+            // ================== LOGIKA SPIN ==================
+            function animateReel(reelElement, callback) {
+                var icon = reelElement.querySelector('.icon');
+                icon.classList.add('spinning');
+                var count = 0;
+                var interval = setInterval(function() {
+                    var rand = getRandomSymbol();
+                    icon.textContent = rand.id;
+                    count++;
+                    if (count >= 7) {
+                        clearInterval(interval);
+                        icon.classList.remove('spinning');
+                        if (callback) callback();
+                    }
+                }, 100);
+            }
+            
+            function spinAllReels(callback) {
+                var reel1 = document.getElementById('reel1');
+                var reel2 = document.getElementById('reel2');
+                var reel3 = document.getElementById('reel3');
+                var finished = 0;
+                function onReelDone() {
+                    finished++;
+                    if (finished === 3) {
+                        if (callback) callback();
+                    }
+                }
+                animateReel(reel1, onReelDone);
+                animateReel(reel2, onReelDone);
+                animateReel(reel3, onReelDone);
+            }
+
+            function checkAndClaimPendingJackpot() {
+                return new Promise(function(resolve) {
+                    if (!currentUser) {
+                        resolve(false);
+                        return;
+                    }
+                    getPendingJackpotForUser(currentUser.username, function(jackpots) {
+                        if (jackpots.length > 0) {
+                            var jackpot = jackpots[0];
+                            var amount = jackpot.amount;
+                            claimPendingJackpot(jackpot.id, currentUser.username, amount);
+                            balance += amount;
+                            updateBalanceUI();
+                            updateBerandaSaldo();
+                            var resultArea = document.getElementById('resultArea');
+                            if (resultArea) {
+                                resultArea.innerHTML = '<div class="jackpot-msg">🎰 JACKPOT! ' + formatRupiah(amount) + ' 🎰</div>';
+                            }
+                            var symbols = '🎰 💎 👑';
+                            showJackpotOverlay(symbols, amount, currentUser.username);
+                            resolve(true);
+                        } else {
+                            resolve(false);
+                        }
+                    });
+                });
+            }
+
+            function performSpin() {
+                if (isSpinning || isJackpotShowing) return;
+                checkAutoReset();
+                var currentBet = parseInt(document.getElementById('betInput').value);
+                if (isNaN(currentBet) || currentBet <= 0) {
+                    document.getElementById('resultArea').innerHTML = '⚠️ Taruhan harus lebih dari 0!';
+                    return;
+                }
+                if (balance < currentBet) {
+                    document.getElementById('resultArea').innerHTML = '⚠️ Saldo tidak cukup!';
+                    return;
+                }
+
+                isSpinning = true;
+                var spinBtn = document.getElementById('spinBtn');
+                spinBtn.disabled = true;
+                document.getElementById('resultArea').innerHTML = '🌀 Memutar ...';
+                playSpinSound();
+
+                balance -= currentBet;
+                updateBalanceUI();
+                updateBerandaSaldo();
+
+                spinAllReels(function() {
+                    checkAndClaimPendingJackpot().then(function(jackpotClaimed) {
+                        var final1 = document.getElementById('icon1').textContent;
+                        var final2 = document.getElementById('icon2').textContent;
+                        var final3 = document.getElementById('icon3').textContent;
+
+                        var winAmount = 0;
+                        var message = '';
+                        var isJackpot = false;
+                        var multiplier = 0;
+
+                        var allSame = (final1 === final2 && final2 === final3);
+                        var pair = (final1 === final2 || final2 === final3 || final1 === final3);
+                        var jackpotRoll = Math.random() < 0.03;
+
+                        if (allSame) {
+                            multiplier = getRandomMultiplier();
+                            if (jackpotRoll) {
+                                isJackpot = true;
+                                multiplier = multiplier * (Math.floor(Math.random() * 4) + 2);
+                                winAmount = Math.round(currentBet * multiplier);
+                                message = '🎰 JACKPOT! ' + formatRupiah(winAmount) + ' 🎰';
+                            } else {
+                                winAmount = Math.round(currentBet * multiplier);
+                                if (winAmount > 0) {
+                                    message = '' + formatRupiah(winAmount);
+                                }
+                            }
+                        } else if (pair) {
+                            multiplier = getRandomMultiplier();
+                            if (jackpotRoll) {
+                                isJackpot = true;
+                                multiplier = multiplier * (Math.floor(Math.random() * 3) + 2);
+                                winAmount = Math.round(currentBet * multiplier);
+                                message = '🎰 JACKPOT! ' + formatRupiah(winAmount) + ' 🎰';
+                            } else {
+                                winAmount = Math.round(currentBet * multiplier);
+                                if (winAmount > 0) {
+                                    message = '' + formatRupiah(winAmount);
+                                }
+                            }
+                        } else {
+                            if (jackpotRoll) {
+                                isJackpot = true;
+                                var jackpotMulti = Math.floor(Math.random() * 10) + 5;
+                                winAmount = Math.round(currentBet * jackpotMulti);
+                                message = '🎰 JACKPOT! ' + formatRupiah(winAmount) + ' 🎰';
+                            } else {
+                                winAmount = 0;
+                                multiplier = 0;
+                            }
+                        }
+
+                        if (winAmount > 0) {
+                            balance += winAmount;
+                            updateBalanceUI();
+                            updateBerandaSaldo();
+                            if (isJackpot) {
+                                var symbols = final1 + ' ' + final2 + ' ' + final3;
+                                showJackpotOverlay(symbols, winAmount);
+                                if (isAdminLoggedIn) {
+                                    addLog('🎰 Jackpot dimenangkan oleh ' + (currentUser ? currentUser.username : 'player') + '! ' + formatRupiah(winAmount), true);
+                                }
+                            } else {
+                                playWinSound();
+                            }
+                        } else {
+                            playLoseSound();
+                        }
+
+                        var resultHTML = '<div style="font-size:2rem;letter-spacing:8px;margin-bottom:4px;">' + final1 + ' ' + final2 + ' ' + final3 + '</div>';
+                        if (winAmount > 0 && !isJackpot) {
+                            var multiplierText = '';
+                            if (multiplier > 0) {
+                                if (Number.isInteger(multiplier)) {
+                                    multiplierText = '×' + multiplier;
+                                } else {
+                                    multiplierText = '×' + multiplier.toFixed(1);
+                                }
+                            }
+                            resultHTML += '<div class="win">' + multiplierText + ' ' + formatRupiah(winAmount) + '</div>';
+                        } else if (isJackpot) {
+                            resultHTML += '<div class="win">🎰 JACKPOT! ' + formatRupiah(winAmount) + ' 🎰</div>';
+                        } else {
+                            resultHTML += '<div style="color:#555;font-size:0.8rem;">&nbsp;</div>';
+                        }
+
+                        var resultArea = document.getElementById('resultArea');
+                        if (jackpotClaimed) {
+                            var existing = resultArea.innerHTML;
+                            resultArea.innerHTML = existing + '<div style="margin-top:8px;font-size:0.8rem;color:#888;">' + final1 + ' ' + final2 + ' ' + final3 + '</div>';
+                        } else {
+                            resultArea.innerHTML = resultHTML;
+                        }
+
+                        isSpinning = false;
+                        spinBtn.disabled = false;
+                        updateBalanceUI();
+                        updateBerandaSaldo();
+                        checkAutoReset();
+                    });
+                });
+            }
+
+            // ================== MAX BET ==================
+            function setMaxBet() {
+                if (isSpinning || isJackpotShowing) return;
+                var betInput = document.getElementById('betInput');
+                if (betInput) {
+                    betInput.value = balance;
+                    updateBetUI();
+                    var resultArea = document.getElementById('resultArea');
+                    if (resultArea) {
+                        resultArea.innerHTML = '🔥 Taruhan max: ' + formatRupiah(balance);
+                    }
+                }
+            }
+
+            // ================== EVENT LISTENER GAME ==================
+            document.getElementById('spinBtn').addEventListener('click', performSpin);
+            document.getElementById('maxBetBtn').addEventListener('click', setMaxBet);
+
+            document.getElementById('betInput').addEventListener('input', function() {
+                var val = parseInt(this.value);
+                if (isNaN(val) || val < 1) {
+                    this.value = 1;
+                }
+                updateBetUI();
+            });
+            document.getElementById('betInput').addEventListener('change', function() {
+                var val = parseInt(this.value);
+                if (isNaN(val) || val < 1) {
+                    this.value = 1;
+                }
+                updateBetUI();
+            });
+
+            document.querySelectorAll('.bet-presets button').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    if (isSpinning || isJackpotShowing) return;
+                    var betValue = parseInt(this.dataset.bet);
+                    document.getElementById('betInput').value = betValue;
+                    updateBetUI();
+                    document.querySelectorAll('.bet-presets button').forEach(function(b) { b.classList.remove('active'); });
+                    this.classList.add('active');
+                });
+            });
+
+            document.addEventListener('keydown', function(e) {
+                if (e.code === 'Space' && !e.repeat) {
+                    e.preventDefault();
+                    if (!document.getElementById('spinBtn').disabled && !isJackpotShowing && gameContainer.classList.contains('show')) {
+                        performSpin();
+                    }
+                }
+                if (e.code === 'Escape' && isJackpotShowing) {
+                    hideJackpotOverlay();
+                }
+            });
+
+            // ================== INIT ==================
+            updateBetUI();
+            var resultArea = document.getElementById('resultArea');
+            if (resultArea) {
+                resultArea.innerHTML = '✨ Masukkan taruhan & tekan PUTAR ✨';
+            }
+
+            window.addEventListener('beforeunload', function() {
+                if (currentUser) {
+                    updateUserInDB(currentUser.username, { isOnline: false });
+                }
+            });
+
+            console.log('🚀 GACHA SLOT dengan Firebase siap digunakan!');
+            console.log('👑 Admin: SAITAMA / ADMIN123');
+            console.log('💡 Jackpot bersifat PENDING, akan diberikan saat user melakukan spin');
+            console.log('🔄 Admin panel menampilkan online users secara REAL-TIME');
+            console.log('✅ Hanya bisa diakses ONLINE');
+        } // akhir if (isOnline)
+    </script>
+</body>
+</html>
